@@ -1,0 +1,53 @@
+pipeline {
+    agent any
+
+    environment {
+        REPO_URL = 'https://github.com/Mayur2297/jenkinns.git'
+        IMAGE_NAME = 'your-dockerhub-username/your-image-name'
+        CONTAINER_NAME = 'your-container-name'
+        TOMCAT_URL = 'http://localhost:8090'
+        TOMCAT_USER = 'admin'
+        TOMCAT_PASSWORD = 'admin'
+    }
+
+    stages {
+        stage('Checkout') {
+            steps {
+                git branch: 'master', url: "${REPO_URL}"
+            }
+        }
+
+        stage('Build') {
+            steps {
+                sh './mvnw clean package'
+            }
+        }
+
+        stage('Docker Build & Push') {
+            steps {
+                script {
+                    docker.build("${IMAGE_NAME}").push('latest')
+                }
+            }
+        }
+
+        stage('Deploy to Tomcat') {
+            steps {
+                script {
+                    withCredentials([usernamePassword(credentialsId: 'tomcat-credentials-id', passwordVariable: 'TOMCAT_PASSWORD', usernameVariable: 'TOMCAT_USER')]) {
+                        sh '''
+                            docker run -d --name ${CONTAINER_NAME} ${IMAGE_NAME}
+                            curl -u ${TOMCAT_USER}:${TOMCAT_PASSWORD} -T target/your-spring-boot-app.jar ${TOMCAT_URL}/manager/text/deploy?path=/your-app&update=true
+                        '''
+                    }
+                }
+            }
+        }
+    }
+
+    post {
+        always {
+            cleanWs()
+        }
+    }
+}
